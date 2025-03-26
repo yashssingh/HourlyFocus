@@ -7,8 +7,9 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   tz.initializeTimeZones(); // Required for notifications
   final notificationService = NotificationService();
-  await notificationService.initialize();
-  await notificationService
-      .showLockScreenNotification(); // Show notification on app start for testing
-  runApp(HourlyFocusApp());
+  await notificationService.initialize((action) {
+    // Temporary handler; will connect to HomeScreen
+    print('Action selected: $action');
+  });
+  runApp(HourlyFocusApp(notificationService: notificationService));
 }

@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:hourly_focus/src/services/notification_service.dart';
 import 'package:hourly_focus/src/ui/screens/home_screen.dart';
 
 class HourlyFocusApp extends StatelessWidget {
+  final NotificationService notificationService;
+
+  HourlyFocusApp({required this.notificationService});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -18,7 +23,7 @@ class HourlyFocusApp extends StatelessWidget {
           ),
         ),
       ),
-      home: HomeScreen(),
+      home: HomeScreen(notificationService: notificationService),
     );
   }
 }

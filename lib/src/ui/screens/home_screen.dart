@@ -2,12 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:hourly_focus/src/models/log_entry.dart';
 import 'package:hourly_focus/src/services/database_service.dart';
 import 'package:hourly_focus/src/services/export_service.dart';
+import 'package:hourly_focus/src/services/notification_service.dart';
 import 'package:hourly_focus/src/ui/widgets/log_list.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class HomeScreen extends StatefulWidget {
+  final NotificationService notificationService;
+
+  HomeScreen({required this.notificationService});
+
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }
@@ -25,6 +31,16 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _requestPermissions();
     _loadLogs();
+    widget.notificationService.scheduleHourlyNotifications();
+    // Handle notification actions
+    FlutterLocalNotificationsPlugin()
+        .getNotificationAppLaunchDetails()
+        .then((details) {
+      if (details?.didNotificationLaunchApp == true &&
+          details?.notificationResponse?.actionId != null) {
+        _logHourFromNotification(details!.notificationResponse!.actionId!);
+      }
+    });
   }
 
   Future<void> _requestPermissions() async {
@@ -45,6 +61,13 @@ class _HomeScreenState extends State<HomeScreen> {
     await _dbService.insertLog(log);
     _noteController.clear();
     _loadLogs();
+  }
+
+  // Handle lock screen notification actions
+  Future<void> _logHourFromNotification(String action) async {
+    if (action == 'productive' || action == 'unproductive') {
+      await _logHour(action);
+    }
   }
 
   void _toggleListening() async {
