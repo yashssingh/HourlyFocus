@@ -17,6 +17,7 @@ import 'package:hourly_focus/src/ui/screens/analytics_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:hourly_focus/src/ui/screens/about_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final NotificationService notificationService;
@@ -124,24 +125,41 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   }
 
   Future<void> _logHour(String status) async {
-    final log = LogEntry(
-      timestamp: DateTime.now(),
-      status: status,
-      note: _noteController.text,
-    );
-    await _dbService.insertLog(log);
-    _noteController.clear();
-    _loadData();
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Marked as $status'),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: EdgeInsets.all(8),
-        duration: Duration(seconds: 2),
-      ),
-    );
+    try {
+      final log = LogEntry(
+        timestamp: DateTime.now(),
+        status: status,
+        note: _noteController.text,
+      );
+      await _dbService.insertLog(log);
+      _noteController.clear();
+      _loadData();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Marked as $status'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            margin: EdgeInsets.all(8),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error logging hour: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to log hour. Please try again.'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.red,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            margin: EdgeInsets.all(8),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _logHourFromNotification(String action) async {
@@ -230,6 +248,17 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
             onPressed: _showExportOptions,
             tooltip: 'Export',
           ),
+          IconButton(
+            icon: Icon(Icons.info_outline),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => AboutScreen(),
+                ),
+              );
+            },
+            tooltip: 'About',
+          ),
         ],
         bottom: TabBar(
           controller: _tabController,
@@ -244,44 +273,65 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
           indicatorWeight: 3,
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            isDismissible: true,
-            enableDrag: true,
-            builder: (context) {
-              return SingleChildScrollView(
-                child: DailyLogForm(
-                  onProductivePressed: () {
-                    Navigator.pop(context);
-                    _logHour('productive');
-                  },
-                  onUnproductivePressed: () {
-                    Navigator.pop(context);
-                    _logHour('unproductive');
-                  },
-                  noteController: _noteController,
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+          child: Container(
+            height: 56,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 16.0, right: 8.0),
+                    child: TextField(
+                      controller: _noteController,
+                      decoration: InputDecoration(
+                        hintText: 'What are you working on?',
+                        border: InputBorder.none,
+                        hintStyle: TextStyle(color: Colors.grey.shade600),
+                      ),
+                      style: TextStyle(fontSize: 14),
+                    ),
+                  ),
                 ),
-              );
-            },
-          ).catchError((error) {
-            print('Error showing modal bottom sheet: $error');
-            // Show an error message to the user
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Failed to open log form. Please try again.'),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          });
-        },
-        label: Text('Log Hour'),
-        icon: Icon(Icons.add),
-        backgroundColor: colorScheme.primary,
-        foregroundColor: colorScheme.onPrimary,
+                Container(
+                  height: 40,
+                  width: 40,
+                  margin: EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: Icon(Icons.check, color: Colors.white, size: 18),
+                    onPressed: () => _logHour('productive'),
+                    tooltip: 'Productive',
+                    padding: EdgeInsets.zero,
+                  ),
+                ),
+                Container(
+                  height: 40,
+                  width: 40,
+                  margin: EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: Icon(Icons.close, color: Colors.white, size: 18),
+                    onPressed: () => _logHour('unproductive'),
+                    tooltip: 'Unproductive',
+                    padding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
       body: TabBarView(
         controller: _tabController,
@@ -358,26 +408,25 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         .fadeIn(duration: 500.ms, delay: 300.ms)
         .slide(begin: Offset(0, -0.1)),
         
-        SizedBox(height: 12),
+        SizedBox(height: 16),
         
         Container(
-          height: 250,
+          height: 230,
           child: Card(
             elevation: 2,
+            margin: EdgeInsets.zero,
+            clipBehavior: Clip.antiAlias,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: WeeklyProductivityChart(logs: _weeklyLogs),
-            ),
+            child: WeeklyProductivityChart(logs: _weeklyLogs),
           ),
         )
         .animate(controller: _animationController)
         .fadeIn(duration: 800.ms, delay: 400.ms)
         .slide(begin: Offset(0, 0.1)),
         
-        SizedBox(height: 20),
+        SizedBox(height: 30),
         
         Text(
           'Hourly Productivity',
@@ -389,19 +438,16 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         .fadeIn(duration: 500.ms, delay: 500.ms)
         .slide(begin: Offset(0, -0.1)),
         
-        SizedBox(height: 12),
+        SizedBox(height: 16),
         
         Container(
-          height: 200,
+          height: 300,
           child: Card(
             elevation: 2,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: HourlyHeatmapChart(logs: _weeklyLogs),
-            ),
+            child: HourlyHeatmapChart(logs: _weeklyLogs),
           ),
         )
         .animate(controller: _animationController)
@@ -548,7 +594,8 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                 physics: NeverScrollableScrollPhysics(),
                 itemCount: todayLogs.length,
                 itemBuilder: (context, index) {
-                  final log = todayLogs[index];
+                  final reversedIndex = todayLogs.length - 1 - index;
+                  final log = todayLogs[reversedIndex];
                   return Card(
                     elevation: 1,
                     margin: EdgeInsets.only(bottom: 8),
@@ -652,70 +699,67 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     return Shimmer.fromColors(
       baseColor: Colors.grey.shade300,
       highlightColor: Colors.grey.shade100,
-      child: Padding(
+      child: ListView(
         padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              height: 32,
-              width: 200,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
+        children: [
+          Container(
+            height: 32,
+            width: 200,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
             ),
-            SizedBox(height: 16),
-            Container(
-              height: 120,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-              ),
+          ),
+          SizedBox(height: 16),
+          Container(
+            height: 120,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
             ),
-            SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    height: 120,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+          ),
+          SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 120,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
                   ),
                 ),
-                SizedBox(width: 16),
-                Expanded(
-                  child: Container(
-                    height: 120,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                child: Container(
+                  height: 120,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
                   ),
                 ),
-              ],
-            ),
-            SizedBox(height: 24),
-            Container(
-              height: 32,
-              width: 150,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
               ),
+            ],
+          ),
+          SizedBox(height: 24),
+          Container(
+            height: 32,
+            width: 150,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
             ),
-            SizedBox(height: 16),
-            Container(
-              height: 200,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-              ),
+          ),
+          SizedBox(height: 16),
+          Container(
+            height: 200,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

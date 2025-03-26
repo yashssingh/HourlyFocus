@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hourly_focus/src/services/notification_service.dart';
-import 'package:hourly_focus/src/ui/screens/dashboard_screen.dart';
+import 'package:hourly_focus/src/ui/screens/splash_screen.dart';
 
 class HourlyFocusApp extends StatelessWidget {
   final NotificationService notificationService;
@@ -102,7 +102,7 @@ class HourlyFocusApp extends StatelessWidget {
         ),
       ),
       themeMode: ThemeMode.system,
-      home: DashboardScreen(notificationService: notificationService),
+      home: SplashScreen(notificationService: notificationService),
     );
   }
 }

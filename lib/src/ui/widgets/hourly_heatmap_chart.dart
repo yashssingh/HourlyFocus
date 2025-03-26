@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hourly_focus/src/models/log_entry.dart';
+import 'package:intl/intl.dart';
 
 class HourlyHeatmapChart extends StatelessWidget {
   final List<LogEntry> logs;
@@ -22,7 +23,11 @@ class HourlyHeatmapChart extends StatelessWidget {
     for (final log in logs) {
       final hour = log.timestamp.hour;
       totalHours[hour] = (totalHours[hour] ?? 0) + 1;
-      if (log.status == 'productive') {
+      
+      // Check if the note contains "BOT" text which indicates overflow
+      bool isBot = log.note.toUpperCase().contains("BOT");
+      
+      if (log.status == 'productive' && !isBot) {
         productiveHours[hour] = (productiveHours[hour] ?? 0) + 1;
       }
     }
@@ -37,153 +42,122 @@ class HourlyHeatmapChart extends StatelessWidget {
       }
     }
     
-    // Find max total logs in any hour for normalization
-    int maxTotalLogs = 0;
-    totalHours.forEach((hour, count) {
-      if (count > maxTotalLogs) maxTotalLogs = count;
-    });
-    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          'Most Productive Hours',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-        ),
-        SizedBox(height: 12),
-        Row(
-          children: [
-            _buildTimeLabels(context),
-            SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHeatmap(
-                    context: context,
-                    productivityRates: productivityRates,
-                    totalHours: totalHours,
-                    maxTotalLogs: maxTotalLogs,
-                  ),
-                  SizedBox(height: 4),
-                  _buildLegend(context),
-                ],
-              ),
+        Padding(
+          padding: const EdgeInsets.only(left: 16.0, top: 16.0, right: 16.0),
+          child: Text(
+            'Most Productive Hours',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
             ),
-          ],
-        ),
-      ],
-    );
-  }
-  
-  Widget _buildTimeLabels(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Text(
-          'AM',
-          style: TextStyle(
-            fontSize: 10,
-            color: Colors.grey.shade600,
-            fontWeight: FontWeight.bold,
           ),
         ),
-        SizedBox(height: 37),
-        Text(
-          'PM',
-          style: TextStyle(
-            fontSize: 10,
-            color: Colors.grey.shade600,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
-    );
-  }
-  
-  Widget _buildHeatmap({
-    required BuildContext context,
-    required Map<int, double> productivityRates,
-    required Map<int, int> totalHours,
-    required int maxTotalLogs,
-  }) {
-    return Container(
-      height: 80,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: List.generate(24, (hour) {
-          final productivityRate = productivityRates[hour] ?? 0.0;
-          final totalLogsForHour = totalHours[hour] ?? 0;
-          
-          // Determine cell size based on total logs (minimum size applied)
-          final double cellHeight = totalLogsForHour > 0
-              ? 30.0 + (totalLogsForHour / maxTotalLogs) * 50.0
-              : 25.0;
-          
-          return Column(
+        SizedBox(height: 16),
+        
+        // AM hours (0-11)
+        _buildHourSection('AM', 0, 11, productivityRates, totalHours),
+        
+        SizedBox(height: 16),
+        
+        // PM hours (12-23)
+        _buildHourSection('PM', 12, 23, productivityRates, totalHours),
+        
+        // Legend
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Tooltip(
-                message: _getHourLabel(hour) + 
-                    '\nProductive: ${(productivityRate * 100).toInt()}%' +
-                    '\nEntries: $totalLogsForHour',
-                textStyle: TextStyle(
-                  fontSize: 10,
-                  color: Colors.white,
-                ),
-                child: Container(
-                  width: 10,
-                  height: cellHeight,
-                  decoration: BoxDecoration(
-                    color: _getProductivityColor(productivityRate, totalLogsForHour > 0),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              if (hour % 3 == 0) 
-                Padding(
-                  padding: const EdgeInsets.only(top: 4.0),
-                  child: Text(
-                    hour.toString(),
-                    style: TextStyle(
-                      fontSize: 8,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ),
+              _buildLegendItem(Colors.green.shade200, 'Low'),
+              SizedBox(width: 16),
+              _buildLegendItem(Colors.green.shade500, 'Medium'),
+              SizedBox(width: 16),
+              _buildLegendItem(Colors.green.shade800, 'High'),
             ],
-          );
-        }),
-      ),
-    );
-  }
-  
-  Widget _buildLegend(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _buildLegendItem('Low', _getProductivityColor(0.2, true), context),
-        SizedBox(width: 8),
-        _buildLegendItem('Medium', _getProductivityColor(0.5, true), context),
-        SizedBox(width: 8),
-        _buildLegendItem('High', _getProductivityColor(0.8, true), context),
-        SizedBox(width: 8),
-        _buildLegendItem('No Data', _getProductivityColor(0, false), context),
+          ),
+        ),
       ],
     );
   }
   
-  Widget _buildLegendItem(String label, Color color, BuildContext context) {
+  Widget _buildHourSection(String label, int startHour, int endHour, 
+                          Map<int, double> productivityRates, Map<int, int> totalHours) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Label (AM/PM)
+        SizedBox(
+          width: 30,
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey.shade700
+              ),
+            ),
+          ),
+        ),
+        
+        // Hours
+        Expanded(
+          child: SizedBox(
+            height: 70,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              physics: NeverScrollableScrollPhysics(),
+              itemCount: endHour - startHour + 1,
+              itemBuilder: (context, index) {
+                final hour = startHour + index;
+                final productivityRate = productivityRates[hour] ?? 0.0;
+                final totalLogsForHour = totalHours[hour] ?? 0;
+                
+                return SizedBox(
+                  width: 24,
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: Tooltip(
+                          message: '${_getHourLabel(hour)}\nProductive: ${(productivityRate * 100).toInt()}%\nEntries: $totalLogsForHour',
+                          child: Container(
+                            width: 14,
+                            decoration: BoxDecoration(
+                              color: _getProductivityColor(productivityRate, totalLogsForHour > 0),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        hour.toString(),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildLegendItem(Color color, String label) {
     return Row(
       children: [
         Container(
-          width: 8,
-          height: 8,
+          width: 12,
+          height: 12,
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(2),
@@ -191,13 +165,8 @@ class HourlyHeatmapChart extends StatelessWidget {
         ),
         SizedBox(width: 4),
         Text(
-          label,
-          style: TextStyle(
-            fontSize: 8,
-            color: Theme.of(context).brightness == Brightness.light
-                ? Colors.grey.shade700
-                : Colors.grey.shade300,
-          ),
+          label, 
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade700)
         ),
       ],
     );
@@ -205,10 +174,10 @@ class HourlyHeatmapChart extends StatelessWidget {
   
   Color _getProductivityColor(double rate, bool hasData) {
     if (!hasData) return Colors.grey.shade200;
-    if (rate >= 0.7) return Colors.green.shade700;
-    if (rate >= 0.5) return Colors.green;
-    if (rate >= 0.3) return Colors.amber;
-    return Colors.red;
+    if (rate >= 0.7) return Colors.green.shade800;
+    if (rate >= 0.4) return Colors.green.shade500;
+    if (rate > 0) return Colors.green.shade200;
+    return Colors.red.shade300;
   }
   
   String _getHourLabel(int hour) {
