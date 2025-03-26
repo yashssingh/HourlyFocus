@@ -1,6 +1,10 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
+import 'package:flutter/foundation.dart';
+
+// Import main.dart with the background handler
+import 'package:hourly_focus/main.dart';
 
 class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin =
@@ -10,7 +14,7 @@ class NotificationService {
   Future<void> initialize(Function(String) onActionSelected) async {
     tz.initializeTimeZones();
 
-    // Android initialization settings
+    // Android initialization settings with notification channels
     final androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
@@ -23,11 +27,13 @@ class NotificationService {
         DarwinNotificationCategory(
           'HOURLY_CHECKIN',
           actions: [
-            DarwinNotificationAction.plain('productive', 'Productive'),
-            DarwinNotificationAction.plain('unproductive', 'Unproductive'),
+            DarwinNotificationAction.plain('productive', 'Productive',
+                options: {DarwinNotificationActionOption.foreground}),
+            DarwinNotificationAction.plain('unproductive', 'Unproductive',
+                options: {DarwinNotificationActionOption.foreground}),
           ],
           options: {
-            DarwinNotificationCategoryOption.customDismissAction,
+            DarwinNotificationCategoryOption.hiddenPreviewShowTitle,
             DarwinNotificationCategoryOption.allowInCarPlay,
           },
         ),
@@ -46,21 +52,52 @@ class NotificationService {
           onActionSelected(response.actionId!);
         }
       },
+      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
+
+    // Request permission for handling notifications when app is terminated
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
+        
+    // Request additional notification permissions for iOS lock screen
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin>()
+        ?.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+          critical: true,
+        );
   }
 
   /// Schedules notifications every minute for testing purposes.
   Future<void> scheduleHourlyNotifications() async {
-    // Android notification details
+    // Android notification details with full screen intent for lock screen
     const androidDetails = AndroidNotificationDetails(
       'hourly_focus',
       'Hourly Check-In',
       channelDescription: 'Prompts for productivity tracking',
       importance: Importance.max,
       priority: Priority.high,
+      fullScreenIntent: true,
+      visibility: NotificationVisibility.public,
+      category: AndroidNotificationCategory.alarm,
       actions: [
-        AndroidNotificationAction('productive', 'Productive'),
-        AndroidNotificationAction('unproductive', 'Unproductive'),
+        AndroidNotificationAction(
+          'productive', 
+          'Productive',
+          showsUserInterface: false,
+          cancelNotification: true,
+        ),
+        AndroidNotificationAction(
+          'unproductive', 
+          'Unproductive',
+          showsUserInterface: false,
+          cancelNotification: true,
+        ),
       ],
     );
 
@@ -70,6 +107,8 @@ class NotificationService {
       presentBadge: true,
       presentSound: true,
       categoryIdentifier: 'HOURLY_CHECKIN',
+      interruptionLevel: InterruptionLevel.timeSensitive,
+      threadIdentifier: 'hourly_focus_thread',
     );
 
     // Combine details for both platforms
@@ -115,5 +154,16 @@ class NotificationService {
       }
     }
     */
+  }
+}
+
+// Required for handling notification actions when app is in background or terminated
+@pragma('vm:entry-point')
+void notificationBackgroundCallback(NotificationResponse response) {
+  // This callback will be invoked when the user responds from the lock screen
+  // The action ID will be either 'productive' or 'unproductive'
+  if (response.actionId != null) {
+    // We need to save this response to process when the app is launched
+    print('Background action received: ${response.actionId}');
   }
 }
