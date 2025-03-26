@@ -2,33 +2,97 @@ import 'package:flutter/material.dart';
 import 'package:hourly_focus/src/models/log_entry.dart';
 import 'package:hourly_focus/src/services/database_service.dart';
 import 'package:hourly_focus/src/services/export_service.dart';
+import 'package:hourly_focus/src/services/notification_service.dart';
 import 'package:hourly_focus/src/ui/widgets/log_list.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class HomeScreen extends StatefulWidget {
+  final NotificationService notificationService;
+
+  HomeScreen({required this.notificationService});
+
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final DatabaseService _dbService = DatabaseService();
   final ExportService _exportService = ExportService();
   final TextEditingController _noteController = TextEditingController();
   final SpeechToText _speech = SpeechToText();
   bool _isListening = false;
   List<LogEntry> _logs = [];
+  final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _requestPermissions();
     _loadLogs();
+    _checkNotificationLaunch();
+    widget.notificationService.scheduleHourlyNotifications();
+  }
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Reload logs when the app is resumed, which might happen after
+    // responding to a notification from the lock screen
+    if (state == AppLifecycleState.resumed) {
+      _loadLogs();
+    }
+  }
+
+  Future<void> _checkNotificationLaunch() async {
+    // Check if app was launched from a notification
+    final details = await _notificationsPlugin.getNotificationAppLaunchDetails();
+    if (details?.didNotificationLaunchApp == true) {
+      final String? actionId = details?.notificationResponse?.actionId;
+      if (actionId != null) {
+        _logHourFromNotification(actionId);
+      }
+    }
+    
+    // Set up handling for future notification actions
+    _setUpNotificationActionHandler();
+  }
+  
+  void _setUpNotificationActionHandler() {
+    // Listen for notification actions when app is running
+    _notificationsPlugin.initialize(
+      InitializationSettings(
+        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        iOS: DarwinInitializationSettings(),
+      ),
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        if (response.actionId != null) {
+          _logHourFromNotification(response.actionId!);
+        }
+      },
+    );
   }
 
   Future<void> _requestPermissions() async {
     await Permission.microphone.request();
+    
+    // Request notification permissions
+    await Permission.notification.request();
+    
+    // For iOS, request critical notifications permission
+    if (Theme.of(context).platform == TargetPlatform.iOS) {
+      await _notificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>()
+          ?.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+            critical: true,
+          );
+    }
   }
 
   Future<void> _loadLogs() async {
@@ -45,6 +109,30 @@ class _HomeScreenState extends State<HomeScreen> {
     await _dbService.insertLog(log);
     _noteController.clear();
     _loadLogs();
+  }
+
+  // Handle lock screen notification actions
+  Future<void> _logHourFromNotification(String action) async {
+    if (action == 'productive' || action == 'unproductive') {
+      final log = LogEntry(
+        timestamp: DateTime.now(),
+        status: action,
+        note: 'Logged from notification',
+      );
+      await _dbService.insertLog(log);
+      
+      // Show a confirmation toast or snackbar when the app is visible
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Marked hour as $action from notification'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      
+      _loadLogs();
+    }
   }
 
   void _toggleListening() async {
@@ -119,8 +207,14 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.teal,
         actions: [
           IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: _loadLogs,
+            tooltip: 'Refresh logs',
+          ),
+          IconButton(
             icon: Icon(Icons.file_download),
             onPressed: _showExportOptions,
+            tooltip: 'Export logs',
           ),
         ],
       ),
@@ -210,6 +304,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _noteController.dispose();
     _speech.stop();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 }
