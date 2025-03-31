@@ -115,28 +115,28 @@ class NotificationService {
     const notificationDetails =
         NotificationDetails(android: androidDetails, iOS: iosDetails);
 
-    // New code for testing: Schedule notifications every minute for the next 5 minutes
-    final now = DateTime.now();
-    for (int minute = 1; minute <= 5; minute++) {
-      final scheduledTime = tz.TZDateTime.from(
-        now.add(Duration(minutes: minute)),
-        tz.local,
-      );
-      await _plugin.zonedSchedule(
-        minute,
-        'How was this minute?',
-        'Mark it as Productive or Unproductive',
-        scheduledTime,
-        notificationDetails,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        payload: minute.toString(),
-      );
-    }
+    // // New code for testing: Schedule notifications every minute for the next 5 minutes
+    // final now = DateTime.now();
+    // for (int minute = 1; minute <= 5; minute++) {
+    //   final scheduledTime = tz.TZDateTime.from(
+    //     now.add(Duration(minutes: minute)),
+    //     tz.local,
+    //   );
+    //   await _plugin.zonedSchedule(
+    //     minute,
+    //     'How was this minute?',
+    //     'Mark it as Productive or Unproductive',
+    //     scheduledTime,3
+    //     notificationDetails,
+    //     uiLocalNotificationDateInterpretation:
+    //         UILocalNotificationDateInterpretation.absoluteTime,
+    //     androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+    //     payload: minute.toString(),
+    //   );
+    // }
 
     // Original hourly scheduling code (commented out to keep it unaffected)
-    /*
+    
     final now = DateTime.now();
     for (int hour = 8; hour <= 22; hour++) {
       final scheduledTime = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour);
@@ -153,7 +153,6 @@ class NotificationService {
         );
       }
     }
-    */
   }
 }
 
